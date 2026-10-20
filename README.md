@@ -11,6 +11,11 @@
 
 <br/>
 
+> **本分支说明**
+>
+> 本分支已取消上游 2.99.0.0 起对 MC 下载功能的限制，恢复了原版游戏下载、整合包安装与版本修改中的 MC 本体选项。
+> 推送 `v*` 或数字开头的 tag 会自动构建并发布 Release，也可以手动运行 Build 工作流并填写 tag。
+
 ### 相关资源
 - [PCL 下载](https://meloong.com/pcl)：下载可免费使用的正式版 PCL！
 - [PCL 功能投票](https://github.com/Meloong-Git/PCL/discussions/2)：来参加投票吧，开发者会优先处理票数较高的项目！
