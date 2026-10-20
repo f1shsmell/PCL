@@ -1,14 +1,24 @@
 name: Build
 on:
   push:
-    paths:
-      - 'Plain Craft Launcher 2/**'
-      - '.github/workflows/**'
+    branches:
+      - main
+    tags:
+      - 'v*'
+      - '[0-9]*'
   pull_request:
     paths:
       - 'Plain Craft Launcher 2/**'
       - '.github/workflows/**'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 Tag，例如 v2.99.0.0'
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -67,3 +77,69 @@ jobs:
       with:
         name: ${{ matrix.configuration }} ${{ env.describe }}
         path: Plain Craft Launcher 2\obj\${{ matrix.configuration }}\Plain Craft Launcher 2.exe
+
+  publish:
+    name: Publish Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - name: Download Release artifact
+        uses: actions/download-artifact@v7
+        with:
+          pattern: Release*
+          path: dist
+          merge-multiple: true
+
+      - name: Prepare release files
+        shell: pwsh
+        run: |
+          $tag = $env:RELEASE_TAG
+          if ([string]::IsNullOrWhiteSpace($tag)) { throw '缺少发布 Tag。' }
+          $version = $tag -replace '^[vV]', ''
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "无效的 Tag：$tag" }
+
+          $exe = Get-ChildItem -Path dist -Filter '*.exe' -File | Select-Object -First 1
+          if ($null -eq $exe) { throw '未找到构建产物 exe。' }
+
+          Copy-Item $exe.FullName "dist\PCL2-$version.exe" -Force
+          Compress-Archive -Path "dist\PCL2-$version.exe" -DestinationPath "dist\PCL2-$version.zip" -Force
+
+          @"
+          本分支已取消上游 2.99.0.0 起对 MC 下载功能的限制。
+
+          - 恢复原版游戏下载
+          - 恢复整合包安装与版本修改中的 MC 本体选项
+          "@ | Out-File -FilePath release-notes.md -Encoding utf8
+
+      - name: Create or update GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          $version = $tag -replace '^[vV]', ''
+
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag 已存在，更新说明并覆盖产物。"
+            gh release edit $tag --title "PCL $version" --notes-file release-notes.md
+            gh release upload $tag "dist\PCL2-$version.exe" "dist\PCL2-$version.zip" --clobber
+          } else {
+            $releaseArgs = @(
+              $tag,
+              "dist\PCL2-$version.exe",
+              "dist\PCL2-$version.zip",
+              '--title', "PCL $version",
+              '--notes-file', 'release-notes.md'
+            )
+            if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+              $releaseArgs += @('--target', $env:GITHUB_SHA)
+            }
+            gh release create @releaseArgs
+          }
