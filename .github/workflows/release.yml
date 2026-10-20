@@ -97,7 +97,7 @@ jobs:
         gh release view $tag *> $null
         if ($LASTEXITCODE -eq 0) {
           Write-Host "Release $tag 已存在，更新说明并覆盖产物。"
-          gh release edit $tag --title "PCL $version" --notes-file release-notes.md
+          gh release edit $tag --title "PCL $version" --notes-file release-notes.md --draft=false
           gh release upload $tag "dist\PCL2-$version.exe" "dist\PCL2-$version.zip" --clobber
         } else {
           $releaseArgs = @(
@@ -105,7 +105,8 @@ jobs:
             "dist\PCL2-$version.exe",
             "dist\PCL2-$version.zip",
             '--title', "PCL $version",
-            '--notes-file', 'release-notes.md'
+            '--notes-file', 'release-notes.md',
+            '--draft=false'
           )
           if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
             $releaseArgs += @('--target', $env:GITHUB_SHA)
